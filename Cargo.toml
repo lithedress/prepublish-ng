@@ -1,0 +1,32 @@
+[package]
+name = "prepublish-ng"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = { version = "1.0.71", features = ["backtrace"] }
+async-recursion = "1.0.4"
+async-trait = "0.1.68"
+axum = { version = "0.6.18", features = ["macros", "headers", "multipart"] }
+axum-csrf-sync-pattern = "0.3.1"
+axum-sessions = "0.5.0"
+chrono = { version = "0.4.26", features = ["serde"] }
+config = "0.13.3"
+futures-util = "0.3.28"
+futures_codec = "0.4.1"
+lettre = { version = "0.10.4", features = ["serde", "tokio1-native-tls"] }
+mime = "0.3.17"
+mongodm = { version = "0.9.1", features = ["chrono-0_4"] }
+passwords = { version = "3.1.13", features = ["crypto"] }
+rand = { version = "0.8.5", features = ["min_const_gen"] }
+regex = "1.8.3"
+sea-orm = { version = "0.11.3", features = ["sqlx-postgres", "runtime-tokio-native-tls"] }
+serde = { version = "1.0.163", features = ["derive"] }
+serde_json = "1.0.96"
+thiserror = "1.0.40"
+tokio = { version = "1.28.2", features = ["full"] }
+tower-http = { version = "0.4.0", features = ["cors"] }
+url = { version = "2.3.1", features = ["serde"] }
+utoipa = { version = "3.3.0", features = ["axum_extras"] }
