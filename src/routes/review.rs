@@ -1,11 +1,12 @@
-use crate::mongo_entities::thesis::{Review, VersionState};
-use crate::routes::common::auth::{AuthInfo, Permission};
-use crate::routes::common::err::AppError;
-use crate::state::AppState;
 use axum::extract::{Path, State};
 use axum::{debug_handler, routing, Json, Router};
 use mongodm::prelude::ObjectId;
 use mongodm::{doc, ToRepository};
+
+use crate::mongo_entities::thesis::{Review, VersionState};
+use crate::routes::common::auth::{AuthInfo, Permission};
+use crate::routes::common::err::AppError;
+use crate::state::AppState;
 
 #[debug_handler]
 async fn get(
@@ -39,7 +40,7 @@ async fn get(
                 {
                     let thesis =
                         super::thesis::find_thesis_by_id(&state, version.thesis_id).await?;
-                    if !(thesis.owner_id == auth_info.id
+                    if !(thesis.id.owner_id == auth_info.id
                         || thesis.author_ids.contains(&auth_info.id))
                     {
                         return Err(AppError::Forbidden(format!("Review {} is not public!", id)));

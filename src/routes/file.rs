@@ -1,18 +1,23 @@
 use std::str::FromStr;
+
 use axum::body::StreamBody;
 use axum::extract::{Path, State};
 use axum::headers::{ContentDisposition, ContentLength, ContentType, Header, HeaderValue};
-use axum::TypedHeader;
+use axum::{routing, Router, TypedHeader};
 use futures_codec::{BytesCodec, FramedRead};
 use futures_util::{Stream, StreamExt, TryStreamExt};
 use mime::Mime;
-use mongodm::{bson, doc};
 use mongodm::prelude::ObjectId;
+use mongodm::{bson, doc};
+
 use crate::routes::common;
 use crate::routes::common::err::AppError;
 use crate::state::AppState;
 
-pub(super) async fn get(State(state): State<AppState>, Path(id): Path<ObjectId>) -> Result<
+async fn get(
+    State(state): State<AppState>,
+    Path(id): Path<ObjectId>,
+) -> Result<
     (
         TypedHeader<ContentDisposition>,
         TypedHeader<ContentLength>,
@@ -49,7 +54,7 @@ pub(super) async fn get(State(state): State<AppState>, Path(id): Path<ObjectId>)
                 .and_then(|md| md.get("Content-Type").map(ToString::to_string))
                 .unwrap_or_default(),
         )
-            .unwrap_or(mime::TEXT_PLAIN),
+        .unwrap_or(mime::TEXT_PLAIN),
     );
 
     let stream = bucket.open_download_stream(bson!(id)).await?;
@@ -61,4 +66,8 @@ pub(super) async fn get(State(state): State<AppState>, Path(id): Path<ObjectId>)
         TypedHeader(content_type),
         StreamBody::new(stream),
     ))
+}
+
+pub(super) fn new() -> Router<AppState> {
+    Router::new().route("/file/:id", routing::get(get))
 }

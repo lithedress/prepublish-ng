@@ -1,20 +1,23 @@
-use crate::mongo_entities::paper_collection::Magazine;
-use crate::mongo_entities::thesis::{ReviewState, Thesis, Version, VersionState};
-use crate::routes::common::auth::{AuthInfo, Permission};
-use crate::routes::common::err::AppError;
-use crate::state::AppState;
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderName, HeaderValue, StatusCode};
 use axum::{debug_handler, routing, Json, Router};
 use futures_util::{Stream, TryStreamExt};
+use mongodm::bson::Document;
 use mongodm::mongo::options::GridFsUploadOptions;
 use mongodm::mongo::GridFsBucket;
 use mongodm::prelude::{
-    MongoFindOneAndReplaceOptions, MongoFindOneOptions, MongoReturnDocument, ObjectId,
+    MongoFindOneAndReplaceOptions, MongoFindOneOptions, MongoFindOptions, MongoReturnDocument,
+    ObjectId,
 };
 use mongodm::{doc, field, ToRepository};
-use mongodm::bson::Document;
+
+use crate::mongo_entities::paper_collection::Magazine;
+use crate::mongo_entities::thesis::{ReviewState, Thesis, ThesisId, Version, VersionState};
+use crate::routes::common::auth::{AuthInfo, Permission};
+use crate::routes::common::err::AppError;
+use crate::routes::common::query::AppQuery;
+use crate::state::AppState;
 
 #[debug_handler]
 async fn post(
@@ -40,9 +43,12 @@ async fn post(
         )));
     }
 
-    body._id = ObjectId::new();
-    body.owner_id = auth_info.id;
-    body.created_at = chrono::Utc::now();
+    body.id = ThesisId {
+        _id: ObjectId::new(),
+        owner_id: auth_info.id,
+        is_passed: false,
+        created_at: chrono::Utc::now(),
+    };
     let res = state
         .mongo_db
         .repository::<Thesis>()
@@ -62,7 +68,7 @@ async fn get(
 ) -> Result<Json<Thesis>, AppError> {
     let res = find_thesis_by_id(&state, id).await?;
     if !(auth_info.permitted(Permission::Publishing)
-        || res.owner_id == auth_info.id
+        || res.id.owner_id == auth_info.id
         || res.author_ids.contains(&auth_info.id))
     {
         match find_last_version(&state, id).await? {
@@ -92,6 +98,35 @@ async fn get(
 }
 
 #[debug_handler]
+async fn gets(
+    _auth_info: AuthInfo,
+    State(state): State<AppState>,
+    Query(query): Query<AppQuery>,
+    Json(mut body): Json<Document>,
+) -> Result<([(HeaderName, HeaderValue); 4], Json<Vec<Thesis>>), AppError> {
+    body.insert(field!(is_passed in ThesisId), true);
+    let count = state
+        .mongo_db
+        .repository::<Thesis>()
+        .count_documents(body.clone(), None)
+        .await?;
+    let res = state
+        .mongo_db
+        .repository::<Thesis>()
+        .find(
+            body,
+            MongoFindOptions::builder()
+                .skip(query.offset)
+                .limit(query.limit)
+                .build(),
+        )
+        .await?
+        .try_collect()
+        .await?;
+    Ok((query.pagenate(count), Json(res)))
+}
+
+#[debug_handler]
 async fn put(
     auth_info: AuthInfo,
     State(state): State<AppState>,
@@ -100,7 +135,7 @@ async fn put(
 ) -> Result<Json<Thesis>, AppError> {
     let thesis = find_thesis_by_id(&state, id).await?;
     if auth_info.permitted(Permission::Publishing)
-        || thesis.owner_id == auth_info.id
+        || thesis.id.owner_id == auth_info.id
         || thesis.author_ids.contains(&auth_info.id)
     {
         return Err(AppError::Forbidden(format!(
@@ -109,14 +144,12 @@ async fn put(
         )));
     }
 
-    body._id = id;
-    body.owner_id = thesis.owner_id;
-    body.created_at = thesis.created_at;
+    body.id = thesis.id;
     let res = state
         .mongo_db
         .repository::<Thesis>()
         .find_one_and_replace(
-            doc! {field!(_id in Thesis): id},
+            doc! {"_id": id},
             body,
             Some(
                 MongoFindOneAndReplaceOptions::builder()
@@ -176,7 +209,7 @@ async fn delete(
 ) -> Result<(StatusCode, Json<u64>), AppError> {
     let thesis = find_thesis_by_id(&state, id).await?;
     if !auth_info.permitted(Permission::Publishing) {
-        if thesis.owner_id != auth_info.id {
+        if thesis.id.owner_id != auth_info.id {
             return Err(AppError::Forbidden(format!(
                 "You do not own thesis {}!",
                 id
@@ -209,8 +242,10 @@ async fn upload<'a, 'b>(bucket: &'b GridFsBucket, field: Field<'a>) -> Result<Ob
         )
         .to_string();
     let file_size = if let Some(file_size) = field.size_hint().1 {
-        Some(u32::try_from(file_size)
-            .map_err(|_| AppError::BadRequest(format!("{}-byte is too long!", file_size)))?)
+        Some(
+            u32::try_from(file_size)
+                .map_err(|_| AppError::BadRequest(format!("{}-byte is too long!", file_size)))?,
+        )
     } else {
         None
     };
@@ -285,7 +320,7 @@ async fn commit(
 
 pub(super) fn new() -> Router<AppState> {
     Router::new()
-        .route("/", routing::post(post))
+        .route("/", routing::post(post).get(gets))
         .route("/:id", routing::get(get).put(put).delete(delete))
         .route("/:id/commit", routing::post(commit))
 }

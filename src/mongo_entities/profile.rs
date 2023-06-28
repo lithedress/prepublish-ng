@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(utoipa::ToSchema)]
 #[derive(Serialize, Deserialize)]
-pub(crate) struct ID {
+pub(crate) struct ProfileId {
     #[serde(default)]
     pub(crate) _id: ObjectId,
     pub(crate) email: lettre::Address,
@@ -18,7 +18,7 @@ pub(crate) struct ID {
 #[derive(Serialize, Deserialize)]
 pub(crate) struct PublicProfile {
     #[serde(flatten)]
-    pub(crate) id: ID,
+    pub(crate) id: ProfileId,
     pub(crate) name: String,
 }
 
@@ -53,7 +53,7 @@ impl CollectionConfig for Profile {
         "profiles"
     }
     fn indexes() -> Indexes {
-        Indexes::new().with(Index::new(field!(email in ID)).with_option(IndexOption::Unique))
+        Indexes::new().with(Index::new(field!(email in ProfileId)).with_option(IndexOption::Unique))
     }
 }
 

@@ -1,14 +1,3 @@
-mod profile;
-
-use super::common::{auth::AuthInfoStorage, err::AppError};
-use crate::{
-    mongo_entities::profile::{Profile, ID},
-    sql_entities::{
-        account::{self, ActiveModel},
-        prelude::Account,
-    },
-    state::AppState,
-};
 use axum::{
     debug_handler,
     extract::{Path, State},
@@ -18,6 +7,19 @@ use axum::{
 use mongodm::{bson::to_bson, doc, field, prelude::ObjectId, ToRepository};
 use sea_orm::{prelude::Uuid, ActiveModelTrait, ActiveValue, EntityTrait};
 use serde::Deserialize;
+
+use crate::{
+    mongo_entities::profile::{Profile, ProfileId},
+    sql_entities::{
+        account::{self, ActiveModel},
+        prelude::Account,
+    },
+    state::AppState,
+};
+
+use super::common::{auth::AuthInfoStorage, err::AppError};
+
+mod profile;
 
 async fn get_hash(cost: u8, salt: [u8; 16], password: String) -> Result<[u8; 24], AppError> {
     tokio::task::spawn_blocking(move || passwords::hasher::bcrypt(cost, &salt, &password))
@@ -44,7 +46,7 @@ async fn try_find_profile(
         .repository::<Profile>()
         .find_one(
             doc! {
-                field!(email in ID): to_bson(&email)?
+                field!(email in ProfileId): to_bson(&email)?
             },
             None,
         )
@@ -189,8 +191,7 @@ async fn logout(mut auth_info_storage: AuthInfoStorage) {
 }
 
 pub(super) fn new() -> Router<AppState> {
-    Router::new()
-        .nest("/profile", profile::new())
+    profile::new()
         .route("/signup", routing::post(signup))
         .route("/appoint/:yes", routing::patch(appoint))
         .route("/login", routing::post(login))

@@ -1,26 +1,20 @@
-use crate::mongo_entities::thesis::{
-    Comment, CommentTargetType, Review, ReviewPattern, ReviewState, Version, VersionState,
-};
-use crate::routes::common;
-use crate::routes::common::auth::{AuthInfo, Permission};
-use crate::routes::common::err::AppError;
-use crate::state::AppState;
-use axum::body::StreamBody;
 use axum::extract::{Path, State};
-use axum::headers::{ContentDisposition, ContentLength, ContentType, Header, HeaderValue};
 use axum::http::StatusCode;
-use axum::{debug_handler, routing, Json, Router, TypedHeader};
-use futures_codec::{BytesCodec, FramedRead};
-use futures_util::{Stream, StreamExt, TryStreamExt};
-use mime::Mime;
+use axum::{debug_handler, routing, Json, Router};
 use mongodm::bson::to_document;
 use mongodm::prelude::{to_bson, MongoFindOneAndUpdateOptions, MongoReturnDocument, ObjectId};
 use mongodm::{
-    bson, doc, field,
-    prelude::{Inc, Pull, Set},
+    doc, field,
+    prelude::{Pull, Set},
     ToRepository,
 };
-use std::str::FromStr;
+
+use crate::mongo_entities::thesis::{
+    Comment, CommentTargetType, Review, ReviewPattern, ReviewState, Version, VersionState,
+};
+use crate::routes::common::auth::{AuthInfo, Permission};
+use crate::routes::common::err::AppError;
+use crate::state::AppState;
 
 pub(super) async fn find_version_by_id(
     state: &AppState,
@@ -53,7 +47,7 @@ async fn get(
     let thesis = super::thesis::find_thesis_by_id(&state, res.thesis_id).await?;
     if !(auth_info.permitted(Permission::Publishing)
         || res.uploader_id == Some(auth_info.id)
-        || thesis.owner_id == auth_info.id
+        || thesis.id.owner_id == auth_info.id
         || thesis.author_ids.contains(&auth_info.id))
     {
         match &res {
@@ -92,76 +86,76 @@ async fn get(
     Ok(Json(res))
 }
 
-#[debug_handler]
-async fn download(
-    auth_info: AuthInfo,
-    State(state): State<AppState>,
-    Path(id): Path<ObjectId>,
-) -> Result<
-    (
-        TypedHeader<ContentDisposition>,
-        TypedHeader<ContentLength>,
-        TypedHeader<ContentType>,
-        StreamBody<impl Stream<Item = std::io::Result<Vec<u8>>> + Sized>,
-    ),
-    AppError,
-> {
-    let db = state.mongo_db.clone();
-    let Json(res) = get(auth_info, State(state), Path(id)).await?;
-    let bucket = db.gridfs_bucket(None);
-
-    let doc = bucket
-        .find(
-            doc! {
-                "_id": res.file_id
-            },
-            None,
-        )
-        .await?
-        .next()
-        .await
-        .ok_or(anyhow::anyhow!("File {} lost!", res.file_id))??;
-    let content_disposition =
-        ContentDisposition::decode(&mut std::iter::once(&HeaderValue::try_from(format!(
-            "{}{}{}",
-            common::DISPOSITION_PREFIX,
-            doc.filename.unwrap_or_default(),
-            common::DISPOSITION_SUFFIX
-        ))?))?;
-    let content_length = ContentLength(doc.chunk_size_bytes.into());
-    let content_type = ContentType::from(
-        Mime::from_str(
-            &doc.metadata
-                .and_then(|md| md.get("Content-Type").map(ToString::to_string))
-                .unwrap_or_default(),
-        )
-        .unwrap_or(mime::TEXT_PLAIN),
-    );
-
-    let stream = bucket.open_download_stream(bson!(res.file_id)).await?;
-    let stream = FramedRead::new(stream, BytesCodec).map_ok(|b| b.to_vec());
-
-    db.repository::<Version>()
-        .find_one_and_update(
-            doc! {
-                "_id": id
-            },
-            doc! {
-                Inc: {
-                    field!(downloads in Version): 1
-                }
-            },
-            None,
-        )
-        .await?;
-
-    Ok((
-        TypedHeader(content_disposition),
-        TypedHeader(content_length),
-        TypedHeader(content_type),
-        StreamBody::new(stream),
-    ))
-}
+// #[debug_handler]
+// async fn download(
+//     auth_info: AuthInfo,
+//     State(state): State<AppState>,
+//     Path(id): Path<ObjectId>,
+// ) -> Result<
+//     (
+//         TypedHeader<ContentDisposition>,
+//         TypedHeader<ContentLength>,
+//         TypedHeader<ContentType>,
+//         StreamBody<impl Stream<Item = std::io::Result<Vec<u8>>> + Sized>,
+//     ),
+//     AppError,
+// > {
+//     let db = state.mongo_db.clone();
+//     let Json(res) = get(auth_info, State(state), Path(id)).await?;
+//     let bucket = db.gridfs_bucket(None);
+//
+//     let doc = bucket
+//         .find(
+//             doc! {
+//                 "_id": res.file_id
+//             },
+//             None,
+//         )
+//         .await?
+//         .next()
+//         .await
+//         .ok_or(anyhow::anyhow!("File {} lost!", res.file_id))??;
+//     let content_disposition =
+//         ContentDisposition::decode(&mut std::iter::once(&HeaderValue::try_from(format!(
+//             "{}{}{}",
+//             common::DISPOSITION_PREFIX,
+//             doc.filename.unwrap_or_default(),
+//             common::DISPOSITION_SUFFIX
+//         ))?))?;
+//     let content_length = ContentLength(doc.chunk_size_bytes.into());
+//     let content_type = ContentType::from(
+//         Mime::from_str(
+//             &doc.metadata
+//                 .and_then(|md| md.get("Content-Type").map(ToString::to_string))
+//                 .unwrap_or_default(),
+//         )
+//         .unwrap_or(mime::TEXT_PLAIN),
+//     );
+//
+//     let stream = bucket.open_download_stream(bson!(res.file_id)).await?;
+//     let stream = FramedRead::new(stream, BytesCodec).map_ok(|b| b.to_vec());
+//
+//     db.repository::<Version>()
+//         .find_one_and_update(
+//             doc! {
+//                 "_id": id
+//             },
+//             doc! {
+//                 Inc: {
+//                     field!(downloads in Version): 1
+//                 }
+//             },
+//             None,
+//         )
+//         .await?;
+//
+//     Ok((
+//         TypedHeader(content_disposition),
+//         TypedHeader(content_length),
+//         TypedHeader(content_type),
+//         StreamBody::new(stream),
+//     ))
+// }
 
 #[debug_handler]
 async fn edit(
@@ -357,7 +351,7 @@ async fn comment(
 pub(super) fn new() -> Router<AppState> {
     Router::new()
         .route("/:id", routing::get(get))
-        .route("/:id/file", routing::get(download))
+        //.route("/:id/file", routing::get(download))
         .route("/:id/edit", routing::patch(edit))
         .route("/:id/review", routing::post(review))
         .route("/:id/adjudge/:judgement", routing::patch(adjudge))

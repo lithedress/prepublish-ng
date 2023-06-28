@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use async_recursion::async_recursion;
 use mongodm::bson::to_bson;
 use mongodm::prelude::{
@@ -8,15 +10,25 @@ use mongodm::{
     doc, field, prelude::Set, CollectionConfig, Index, IndexOption, Indexes, Model, ToRepository,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
 
 #[derive(utoipa::ToSchema)]
 #[derive(Serialize, Deserialize)]
-pub(crate) struct Thesis {
+pub(crate) struct ThesisId {
     #[serde(default)]
     pub(crate) _id: ObjectId,
     #[serde(default)]
     pub(crate) owner_id: ObjectId,
+    #[serde(default)]
+    pub(crate) is_passed: bool,
+    #[serde(default)]
+    pub(crate) created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(utoipa::ToSchema)]
+#[derive(Serialize, Deserialize)]
+pub(crate) struct Thesis {
+    #[serde(flatten)]
+    pub(crate) id: ThesisId,
     pub(crate) author_ids: Vec<ObjectId>,
     pub(crate) magazine_id: ObjectId,
     #[serde(default)]
@@ -25,8 +37,6 @@ pub(crate) struct Thesis {
     pub(crate) abstraction: String,
     pub(crate) keywords: Vec<String>,
     pub(crate) languages: BTreeSet<String>,
-    #[serde(default)]
-    pub(crate) created_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl CollectionConfig for Thesis {
@@ -37,10 +47,11 @@ impl CollectionConfig for Thesis {
     fn indexes() -> Indexes {
         Indexes::new()
             .with(
-                Index::new(field!(owner_id in Thesis))
-                    .with_key(field!(created_at in Thesis))
+                Index::new(field!(owner_id in ThesisId))
+                    .with_key(field!(created_at in ThesisId))
                     .with_option(IndexOption::Unique),
             )
+            .with(Index::new(field!(is_passed in ThesisId)))
             .with(Index::new(field!(author_ids in Thesis)))
             .with(Index::new(field!(magazine_id in Thesis)))
             .with(Index::new(field!(doi in Thesis)))
@@ -242,8 +253,7 @@ impl Version {
     }
 
     pub(crate) async fn reject(self, db: MongoDatabase) -> Result<Option<Self>, MongoError> {
-        db
-            .repository::<Version>()
+        db.repository::<Self>()
             .find_one_and_update(
                 doc! {
                     "_id": self._id
@@ -255,7 +265,7 @@ impl Version {
                 },
                 MongoFindOneAndUpdateOptions::builder()
                     .return_document(MongoReturnDocument::After)
-                    .build()
+                    .build(),
             )
             .await
     }
@@ -293,14 +303,33 @@ impl Version {
                 None,
             )
             .await?;
+        db.repository::<Thesis>()
+            .find_one_and_update(
+                doc! {
+                    "_id": self.thesis_id
+                },
+                doc! {
+                    Set: {
+                        field!(is_passed in ThesisId): true
+                    }
+                },
+                None,
+            )
+            .await?;
         Ok(res)
     }
 
-    pub(crate) async fn reviews(&self, db: MongoDatabase) -> Result<MongoCursor<Review>, MongoError> {
+    pub(crate) async fn reviews(
+        &self,
+        db: MongoDatabase,
+    ) -> Result<MongoCursor<Review>, MongoError> {
         db.repository::<Review>()
-            .find(doc! {
+            .find(
+                doc! {
                     field!(version_id in Review): self._id
-                }, None)
+                },
+                None,
+            )
             .await
     }
 
@@ -342,7 +371,7 @@ impl Thesis {
         db.repository::<Self>()
             .delete_many(
                 doc! {
-                    "_id": self._id
+                    "_id": self.id._id
                 },
                 None,
             )
@@ -353,7 +382,7 @@ impl Thesis {
         db.repository::<Version>()
             .find(
                 doc! {
-                    field!(thesis_id in Version): self._id
+                    field!(thesis_id in Version): self.id._id
                 },
                 None,
             )

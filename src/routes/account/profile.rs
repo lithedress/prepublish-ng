@@ -1,13 +1,19 @@
+use axum::extract::{Path, Query, State};
+use axum::http::{HeaderName, HeaderValue};
+use axum::{debug_handler, routing, Json, Router};
+use futures::TryStreamExt;
+use futures_util::Stream;
+use mongodm::bson::Document;
+use mongodm::prelude::{
+    MongoFindOneAndReplaceOptions, MongoFindOptions, MongoReturnDocument, ObjectId,
+};
+use mongodm::{doc, ToRepository};
+
 use crate::mongo_entities::profile::{Profile, PublicProfile};
 use crate::routes::common::auth::AuthInfo;
 use crate::routes::common::err::AppError;
-use crate::state::AppState;
-use axum::extract::{Path, Query, State};
-use axum::{debug_handler, routing, Json, Router};
-use mongodm::prelude::{MongoFindOneAndReplaceOptions, MongoFindOptions, MongoReturnDocument, ObjectId};
-use mongodm::{doc, ToRepository};
-use mongodm::bson::Document;
 use crate::routes::common::query::AppQuery;
+use crate::state::AppState;
 
 #[debug_handler]
 async fn index(
@@ -93,18 +99,38 @@ async fn gets(
     _auth_info: AuthInfo,
     State(state): State<AppState>,
     Query(query): Query<AppQuery>,
-    Json(body): Json<Document>
-) {
-    let count = state.mongo_db.repository::<Profile>().count_documents(body.clone(), None).await.unwrap();
-    let res = state
+    Json(body): Json<Document>,
+) -> Result<([(HeaderName, HeaderValue); 4], Json<Vec<PublicProfile>>), AppError> {
+    let count = state
         .mongo_db
         .repository::<Profile>()
-        .find(body, MongoFindOptions::builder().skip(query.offset).limit(query.limit).build()).await.unwrap();
+        .count_documents(body.clone(), None)
+        .await?;
+    let mut cur = state
+        .mongo_db
+        .repository::<Profile>()
+        .find(
+            body,
+            MongoFindOptions::builder()
+                .skip(query.offset)
+                .limit(query.limit)
+                .build(),
+        )
+        .await?;
+    let mut res = Vec::with_capacity(cur.size_hint().1.unwrap_or_default());
+    while let Some(profile) = cur.try_next().await? {
+        res.push(profile.public_profile)
+    }
+    Ok((query.pagenate(count), Json(res)))
 }
 
 pub(super) fn new() -> Router<AppState> {
     Router::new()
-        .route("/", routing::get(index).put(change))
-        .route("/others", routing::get(gets))
-        .route("/others/:id", routing::get(get))
+        .route("/profile", routing::get(index).put(change))
+        .nest(
+            "/profiles",
+            Router::new()
+                .route("/profiles", routing::get(gets))
+                .route("/profiles/:id", routing::get(get)),
+        )
 }
