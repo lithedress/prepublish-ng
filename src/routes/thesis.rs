@@ -25,27 +25,27 @@ async fn post(
     State(state): State<AppState>,
     Json(mut body): Json<Thesis>,
 ) -> Result<(StatusCode, Json<ObjectId>), AppError> {
-    if state
-        .mongo_db
-        .repository::<Magazine>()
-        .find_one(
-            doc! {
-                "_id": body.magazine_id
-            },
-            None,
-        )
-        .await?
-        .is_none()
-    {
-        return Err(AppError::BadRequest(format!(
-            "No such magazine {}!",
-            body.magazine_id
-        )));
-    }
+    // if state
+    //     .mongo_db
+    //     .repository::<Magazine>()
+    //     .find_one(
+    //         doc! {
+    //             "_id": body.magazine_id
+    //         },
+    //         None,
+    //     )
+    //     .await?
+    //     .is_none()
+    // {
+    //     return Err(AppError::BadRequest(format!(
+    //         "No such magazine {}!",
+    //         body.magazine_id
+    //     )));
+    // }
 
     body.id = ThesisId {
         _id: ObjectId::new(),
-        owner_id: auth_info.id,
+        owner_id: auth_info.id()?,
         is_passed: false,
         created_at: chrono::Utc::now(),
     };
@@ -68,8 +68,8 @@ async fn get(
 ) -> Result<Json<Thesis>, AppError> {
     let res = find_thesis_by_id(&state, id).await?;
     if !(auth_info.permitted(Permission::Publishing)
-        || res.id.owner_id == auth_info.id
-        || res.author_ids.contains(&auth_info.id))
+        || res.id.owner_id == auth_info.id()?
+        || res.author_ids.contains(&auth_info.id()?))
     {
         match find_last_version(&state, id).await? {
             Some(version) if version.major_num > 0 => {}
@@ -82,7 +82,7 @@ async fn get(
                     },
                 ..
             }) => {
-                if !(remainder_reviewer_ids.contains(&auth_info.id)) {
+                if !(remainder_reviewer_ids.contains(&auth_info.id()?)) {
                     return Err(AppError::Forbidden(format!(
                         "You are not allowed to review thesis {}!",
                         id
@@ -135,8 +135,8 @@ async fn put(
 ) -> Result<Json<Thesis>, AppError> {
     let thesis = find_thesis_by_id(&state, id).await?;
     if auth_info.permitted(Permission::Publishing)
-        || thesis.id.owner_id == auth_info.id
-        || thesis.author_ids.contains(&auth_info.id)
+        || thesis.id.owner_id == auth_info.id()?
+        || thesis.author_ids.contains(&auth_info.id()?)
     {
         return Err(AppError::Forbidden(format!(
             "You are neither an editor or an author of thesis {}!",
@@ -209,7 +209,7 @@ async fn delete(
 ) -> Result<(StatusCode, Json<u64>), AppError> {
     let thesis = find_thesis_by_id(&state, id).await?;
     if !auth_info.permitted(Permission::Publishing) {
-        if thesis.id.owner_id != auth_info.id {
+        if thesis.id.owner_id != auth_info.id()? {
             return Err(AppError::Forbidden(format!(
                 "You do not own thesis {}!",
                 id
@@ -277,7 +277,7 @@ async fn commit(
     mut body: Multipart,
 ) -> Result<(StatusCode, Json<ObjectId>), AppError> {
     let thesis = find_thesis_by_id(&state, id).await?;
-    if !thesis.author_ids.contains(&auth_info.id) {
+    if !thesis.author_ids.contains(&auth_info.id()?) {
         return Err(AppError::Forbidden(format!(
             "You are not an author of thesis {}!",
             id
@@ -302,7 +302,7 @@ async fn commit(
     let version = Version {
         thesis_id: id,
         uploaded_at: chrono::Utc::now(),
-        uploader_id: Some(auth_info.id),
+        uploader_id: Some(auth_info.id()?),
         file_id,
         source_id,
         ..Default::default()

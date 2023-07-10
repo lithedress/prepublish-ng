@@ -20,12 +20,10 @@ async fn index(
     auth_info: AuthInfo,
     State(state): State<AppState>,
 ) -> Result<Json<Profile>, AppError> {
-    let res = try_find_profile_by_id(&state, auth_info.id)
+    let id = auth_info.id()?;
+    let res = try_find_profile_by_id(&state, id)
         .await?
-        .ok_or(anyhow::anyhow!(
-            "Your profile {} has been lost!",
-            auth_info.id
-        ))?;
+        .ok_or(anyhow::anyhow!("Your profile {} has been lost!", id))?;
     Ok(Json(res))
 }
 
@@ -35,13 +33,10 @@ async fn change(
     State(state): State<AppState>,
     Json(mut body): Json<Profile>,
 ) -> Result<Json<Profile>, AppError> {
-    let id = auth_info.id;
+    let id = auth_info.id()?;
     let old = try_find_profile_by_id(&state, id)
         .await?
-        .ok_or(anyhow::anyhow!(
-            "Your profile {} has been lost!",
-            auth_info.id
-        ))?;
+        .ok_or(anyhow::anyhow!("Your profile {} has been lost!", id))?;
 
     body.public_profile.id = old.public_profile.id;
     let res = state
@@ -127,8 +122,7 @@ async fn gets(
 pub(super) fn new() -> Router<AppState> {
     Router::new()
         .route("/profile", routing::get(index).put(change))
-        .nest(
-            "/profiles",
+        .merge(
             Router::new()
                 .route("/profiles", routing::get(gets))
                 .route("/profiles/:id", routing::get(get)),

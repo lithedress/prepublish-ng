@@ -46,9 +46,9 @@ async fn get(
     let res = find_version_by_id(&state, id).await?;
     let thesis = super::thesis::find_thesis_by_id(&state, res.thesis_id).await?;
     if !(auth_info.permitted(Permission::Publishing)
-        || res.uploader_id == Some(auth_info.id)
-        || thesis.id.owner_id == auth_info.id
-        || thesis.author_ids.contains(&auth_info.id))
+        || res.uploader_id == Some(auth_info.id()?)
+        || thesis.id.owner_id == auth_info.id()?
+        || thesis.author_ids.contains(&auth_info.id()?))
     {
         match &res {
             Version {
@@ -68,7 +68,7 @@ async fn get(
                     },
                 ..
             } => {
-                if !remainder_reviewer_ids.contains(&auth_info.id) {
+                if !remainder_reviewer_ids.contains(&auth_info.id()?) {
                     return Err(AppError::Forbidden(format!(
                         "You are not allowed to review version {}!",
                         id
@@ -179,7 +179,7 @@ async fn edit(
     }
 
     if let ReviewPattern::Editor(_) = body.pattern {
-        body.pattern = ReviewPattern::Editor(auth_info.id)
+        body.pattern = ReviewPattern::Editor(auth_info.id()?)
     }
     let res = state
         .mongo_db
@@ -229,7 +229,7 @@ async fn review(
     if !version
         .review_state
         .remainder_reviewer_ids
-        .contains(&auth_info.id)
+        .contains(&auth_info.id()?)
     {
         return Err(AppError::Forbidden(format!(
             "You are not allowed to review version {}!",
@@ -239,7 +239,7 @@ async fn review(
 
     body._id = ObjectId::new();
     body.version_id = version._id;
-    body.reviewer_id = Some(auth_info.id);
+    body.reviewer_id = Some(auth_info.id()?);
     body.reviewed_at = chrono::Utc::now();
     let res = state
         .mongo_db
@@ -340,7 +340,7 @@ async fn comment(
         }
     }
 
-    body.poster_id = Some(auth_info.id);
+    body.poster_id = Some(auth_info.id()?);
     body.posted_at = chrono::Utc::now();
     body.target_id = id;
     body.target_type = CommentTargetType::Version;

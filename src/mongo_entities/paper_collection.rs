@@ -1,8 +1,9 @@
+use std::collections::BTreeSet;
+
+use chrono::Utc;
 use mongodm::prelude::ObjectId;
 use mongodm::{field, CollectionConfig, Index, Indexes, Model};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
-use chrono::Utc;
 
 #[derive(utoipa::ToSchema)]
 #[derive(Serialize, Deserialize)]

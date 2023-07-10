@@ -34,15 +34,12 @@ pub(crate) fn new() -> Router<AppState> {
             "/static",
             axum_static::static_router("static").with_state(()),
         )
-        .layer(CsrfLayer::new())
+        //.layer(CsrfLayer::new())
         .layer(SessionLayer::new(
             MemoryStore::new(),
             &rand::thread_rng().gen::<[u8; 128]>(),
         ))
         .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_headers(Any)
-                .expose_headers(["X-CSRF-TOKEN".parse().unwrap()]),
+            CorsLayer::new().allow_origin(Any).allow_headers(Any), //.expose_headers(["X-CSRF-TOKEN".parse().unwrap()]),
         )
 }

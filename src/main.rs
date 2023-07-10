@@ -1,6 +1,7 @@
-use mongodm::prelude::MongoClient;
-use std::{net::SocketAddr, str::FromStr};
 use std::sync::Arc;
+use std::{net::SocketAddr, str::FromStr};
+
+use mongodm::prelude::MongoClient;
 
 mod cfg;
 mod mongo_entities;

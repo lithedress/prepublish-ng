@@ -28,20 +28,20 @@ async fn get(
             "Review with id {} does not exist!",
             id
         )))?;
-    if !(auth_info.permitted(Permission::Publishing) || res.reviewer_id == Some(auth_info.id)) {
+    if !(auth_info.permitted(Permission::Publishing) || res.reviewer_id == Some(auth_info.id()?)) {
         let version = super::version::find_version_by_id(&state, res.version_id).await?;
         match version.state {
             VersionState::History | VersionState::Passed(true) => {
-                if !(version.uploader_id == Some(auth_info.id)
+                if !(version.uploader_id == Some(auth_info.id()?)
                     || version
                         .review_state
                         .remainder_reviewer_ids
-                        .contains(&auth_info.id))
+                        .contains(&auth_info.id()?))
                 {
                     let thesis =
                         super::thesis::find_thesis_by_id(&state, version.thesis_id).await?;
-                    if !(thesis.id.owner_id == auth_info.id
-                        || thesis.author_ids.contains(&auth_info.id))
+                    if !(thesis.id.owner_id == auth_info.id()?
+                        || thesis.author_ids.contains(&auth_info.id()?))
                     {
                         return Err(AppError::Forbidden(format!("Review {} is not public!", id)));
                     }

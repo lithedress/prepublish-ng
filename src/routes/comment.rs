@@ -1,12 +1,13 @@
-use crate::mongo_entities::thesis::{Comment, CommentTargetType};
-use crate::routes::common::auth::AuthInfo;
-use crate::routes::common::err::AppError;
-use crate::state::AppState;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::{debug_handler, routing, Json, Router};
 use mongodm::prelude::ObjectId;
 use mongodm::{doc, ToRepository};
+
+use crate::mongo_entities::thesis::{Comment, CommentTargetType};
+use crate::routes::common::auth::AuthInfo;
+use crate::routes::common::err::AppError;
+use crate::state::AppState;
 
 #[debug_handler]
 async fn get(
@@ -44,7 +45,7 @@ async fn reply(
 ) -> Result<(StatusCode, Json<ObjectId>), AppError> {
     find_comment_by_id(&state, id).await?;
 
-    body.poster_id = Some(auth_info.id);
+    body.poster_id = Some(auth_info.id()?);
     body.posted_at = chrono::Utc::now();
     body.target_type = CommentTargetType::Comment;
     body.target_id = id;

@@ -1,4 +1,3 @@
-use crate::routes::common::err::AppError;
 use async_trait::async_trait;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
@@ -8,6 +7,8 @@ use axum_sessions::{
 };
 use mongodm::prelude::ObjectId;
 use serde::{Deserialize, Serialize};
+
+use crate::routes::common::err::AppError;
 
 #[derive(Eq, PartialEq)]
 #[derive(Copy, Clone)]
@@ -19,15 +20,19 @@ pub(crate) enum Permission {
 }
 
 #[derive(Serialize, Deserialize)]
+#[derive(Default)]
 #[derive(Eq, PartialEq)]
 #[derive(Clone, Copy)]
 #[derive(Debug)]
 pub(crate) struct AuthInfo {
-    pub(crate) id: ObjectId,
+    pub(crate) id: Option<ObjectId>,
     roles: [bool; 2],
 }
 
 impl AuthInfo {
+    pub(crate) fn id(&self) -> Result<ObjectId, AppError> {
+        self.id.ok_or(AppError::Forbidden("Log in!".to_string()))
+    }
     pub(crate) fn permitted(&self, role: Permission) -> bool {
         self.roles
             .get(role as usize)
@@ -47,10 +52,7 @@ where
         Ok(ReadableSession::from_request_parts(parts, state)
             .await?
             .get::<Self>("auth_info")
-            .unwrap_or(AuthInfo {
-                id: ObjectId::from_bytes([0_u8; 12]),
-                roles: [false; 2],
-            }))
+            .unwrap_or(AuthInfo::default()))
     }
 }
 
@@ -67,7 +69,7 @@ impl AuthInfoStorage {
         self.0.insert(
             "auth_info",
             AuthInfo {
-                id,
+                id: Some(id),
                 roles: [is_administrator, is_editor],
             },
         )?;

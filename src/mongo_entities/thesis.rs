@@ -30,7 +30,7 @@ pub(crate) struct Thesis {
     #[serde(flatten)]
     pub(crate) id: ThesisId,
     pub(crate) author_ids: Vec<ObjectId>,
-    pub(crate) magazine_id: ObjectId,
+    //pub(crate) magazine_id: ObjectId,
     #[serde(default)]
     pub(crate) doi: Option<String>,
     pub(crate) title: String,
@@ -53,7 +53,7 @@ impl CollectionConfig for Thesis {
             )
             .with(Index::new(field!(is_passed in ThesisId)))
             .with(Index::new(field!(author_ids in Thesis)))
-            .with(Index::new(field!(magazine_id in Thesis)))
+            //.with(Index::new(field!(magazine_id in Thesis)))
             .with(Index::new(field!(doi in Thesis)))
             .with(Index::new(field!(title in Thesis)))
             .with(Index::new(field!(keywords in Thesis)))
