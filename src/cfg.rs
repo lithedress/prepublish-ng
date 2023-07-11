@@ -18,6 +18,10 @@ fn default_srv_addr() -> String {
     "0.0.0.0:8000".to_string()
 }
 
+fn default_clt_addr() -> String {
+    "http://127.0.0.1:8080".to_string()
+}
+
 fn default_hash_cost() -> u8 {
     4
 }
@@ -47,6 +51,8 @@ pub struct AppConfig {
     pub(crate) mongo_db_nm: String,
     #[serde(default = "default_srv_addr")]
     pub(crate) srv_addr: String,
+    #[serde(default = "default_clt_addr")]
+    pub(crate) clt_addr: String,
     #[serde(default = "default_hash_cost")]
     pub(crate) hash_cost: u8,
     #[serde(default = "default_mail_box")]

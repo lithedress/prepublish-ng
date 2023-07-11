@@ -105,6 +105,7 @@ pub(crate) struct Version {
     pub(crate) uploader_id: Option<ObjectId>,
     pub(crate) major_num: i32,
     pub(crate) minor_num: i32,
+    pub(crate) commit_message: String,
     pub(crate) file_id: ObjectId,
     pub(crate) source_id: Option<ObjectId>,
     pub(crate) state: VersionState,

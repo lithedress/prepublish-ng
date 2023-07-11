@@ -235,11 +235,7 @@ async fn delete(
 async fn upload<'a, 'b>(bucket: &'b GridFsBucket, field: Field<'a>) -> Result<ObjectId, AppError> {
     let file_name = field
         .file_name()
-        .unwrap_or(
-            field
-                .name()
-                .ok_or(AppError::BadRequest("Empty file name!".to_string()))?,
-        )
+        .ok_or(AppError::BadRequest("Empty file name!".to_string()))?
         .to_string();
     let file_size = if let Some(file_size) = field.size_hint().1 {
         Some(
@@ -250,7 +246,7 @@ async fn upload<'a, 'b>(bucket: &'b GridFsBucket, field: Field<'a>) -> Result<Ob
         None
     };
     let file_meta = doc! {
-        "Content-Type": field.content_type().unwrap_or_default().to_string()
+        "content-type": field.content_type().unwrap_or_default().to_string()
     };
 
     let source = field
@@ -284,13 +280,29 @@ async fn commit(
         )));
     }
 
+    let commit_message =
+        if let Some(field) = body.next_field().await.map_err(anyhow::Error::from)? {
+            field.text().await?
+        } else {
+            return Err(AppError::BadRequest("No commit message!".to_string()));
+        };
     let bucket = state.mongo_db.gridfs_bucket(None);
     let (file_id, source_id) =
         if let Some(field) = body.next_field().await.map_err(anyhow::Error::from)? {
             (
-                upload(&bucket, field).await?,
+                {
+                    if field.content_type() != Some(mime::APPLICATION_PDF.as_ref()) {
+                        return Err(AppError::BadRequest(
+                            "Release file is not a PDF!".to_string(),
+                        ));
+                    }
+                    upload(&bucket, field).await?
+                },
                 if let Some(field) = body.next_field().await.map_err(anyhow::Error::from)? {
-                    Some(upload(&bucket, field).await?)
+                    match upload(&bucket, field).await {
+                        Ok(id) => Some(id),
+                        Err(_) => None,
+                    }
                 } else {
                     None
                 },
@@ -303,6 +315,7 @@ async fn commit(
         thesis_id: id,
         uploaded_at: chrono::Utc::now(),
         uploader_id: Some(auth_info.id()?),
+        commit_message,
         file_id,
         source_id,
         ..Default::default()

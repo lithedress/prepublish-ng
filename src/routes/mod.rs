@@ -3,7 +3,6 @@ use axum_csrf_sync_pattern::CsrfLayer;
 use axum_sessions::async_session::MemoryStore;
 use axum_sessions::SessionLayer;
 use rand::Rng;
-use tower_http::cors::{Any, CorsLayer};
 use utoipa::OpenApi;
 
 use crate::state::AppState;
@@ -28,7 +27,7 @@ pub(crate) fn new() -> Router<AppState> {
         .nest("/versions", version::new())
         .nest("/reviews", review::new())
         .nest("/comments", comment::new())
-        .merge(file::new())
+        .nest("/files", file::new())
         .route("/", routing::get(|| async {}))
         .nest(
             "/static",
@@ -39,7 +38,4 @@ pub(crate) fn new() -> Router<AppState> {
             MemoryStore::new(),
             &rand::thread_rng().gen::<[u8; 128]>(),
         ))
-        .layer(
-            CorsLayer::new().allow_origin(Any).allow_headers(Any), //.expose_headers(["X-CSRF-TOKEN".parse().unwrap()]),
-        )
 }

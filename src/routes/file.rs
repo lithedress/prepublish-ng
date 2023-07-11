@@ -6,7 +6,6 @@ use axum::headers::{ContentDisposition, ContentLength, ContentType, Header, Head
 use axum::{routing, Router, TypedHeader};
 use futures_codec::{BytesCodec, FramedRead};
 use futures_util::{Stream, StreamExt, TryStreamExt};
-use mime::Mime;
 use mongodm::prelude::ObjectId;
 use mongodm::{bson, doc};
 
@@ -47,14 +46,14 @@ async fn get(
             doc.filename.unwrap_or_default(),
             common::DISPOSITION_SUFFIX
         ))?))?;
-    let content_length = ContentLength(doc.chunk_size_bytes.into());
+    let content_length = ContentLength(doc.length);
     let content_type = ContentType::from(
-        Mime::from_str(
+        mime::Mime::from_str(
             &doc.metadata
-                .and_then(|md| md.get("Content-Type").map(ToString::to_string))
+                .map(|md| md.get_str("content-type").unwrap_or_default().to_string())
                 .unwrap_or_default(),
         )
-        .unwrap_or(mime::TEXT_PLAIN),
+        .unwrap_or(mime::APPLICATION_OCTET_STREAM),
     );
 
     let stream = bucket.open_download_stream(bson!(id)).await?;
@@ -69,5 +68,5 @@ async fn get(
 }
 
 pub(super) fn new() -> Router<AppState> {
-    Router::new().route("/file/:id", routing::get(get))
+    Router::new().route("/:id", routing::get(get))
 }
